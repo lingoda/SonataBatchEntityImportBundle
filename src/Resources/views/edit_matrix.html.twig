@@ -3,6 +3,7 @@
 {% block navbar_title %}{{ 'page.title.main'|trans({}, 'SonataBatchEntityImportBundle') }}{% endblock %}
 
 {% block sonata_admin_content %}
+    {% form_theme form 'bootstrap_3_layout.html.twig' %}
     {% block notice %}
         {% include ['@SonataCore/FlashMessage/render.html.twig', '@SonataTwig/FlashMessage/render.html.twig'] %}
     {% endblock notice %}
@@ -18,7 +19,7 @@
                     <tr>
                         {% if importConfiguration.allowOverrideEntity %}<th>{{ 'matrix.header.label.override'|trans({}, 'BatchEntityImportBundle') }}</th>{% endif %}
                         {% for name, exists in header_info %}
-                            <th>
+                            <th style="min-width: 150px;">
                                 {% if not exists %}
                                     <div class="label label-danger">{{ 'matrix.header.label.unknown'|trans({}, 'SonataBatchEntityImportBundle') }}</div>
                                 {% endif %}
@@ -32,8 +33,10 @@
                         <tr>
                             {% for elem in record.children %}
                                 <td>
-                                    {{ form_errors(elem) }}
-                                    {{ form_widget(elem) }}
+                                    <div class="form-group {% if form_errors(elem) %}has-error"{% endif %}">
+                                        {{ form_widget(elem) }}
+                                        {{ form_errors(elem) }}
+                                    </div>
                                 </td>
                             {% endfor %}
                         </tr>
