@@ -13,7 +13,7 @@
                 <h4 class="box-title">{{ 'page.title.select_file'|trans({}, 'SonataBatchEntityImportBundle') }}</h4>
             </div>
             <div class="box-body">
-                {{ form_start(form) }}
+                {{ form_start(form, {'action': path(app.request.attributes.get('_route')) }) }}
                 {{ form_rest(form) }}
                 <button type="submit" id="btn-submit"
                         class="btn btn-primary">{{ 'form.button.import'|trans({}, 'SonataBatchEntityImportBundle') }}</button>
