@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace JG\SonataBatchEntityImportBundle\Controller;
 
-use Doctrine\ORM\EntityManagerInterface;
 use JG\BatchEntityImportBundle\Controller\BaseImportControllerTrait;
 use JG\BatchEntityImportBundle\Form\Type\MatrixType;
 use JG\BatchEntityImportBundle\Model\Matrix\Matrix;
@@ -22,22 +21,26 @@ trait ImportControllerTrait
     public function importAction(Request $request): Response
     {
         /** @var ValidatorInterface $validator */
-        $validator = $this->get('validator');
+        $validator = $this->container->get('validator');
 
-        return $this->doImport($request, $validator, $this->getDoctrine()->getManager());
+        return $this->doImport($request, $validator);
     }
 
     public function importSaveAction(Request $request): Response
     {
         /** @var TranslatorInterface $translator */
-        $translator = $this->get('translator');
+        $translator = $this->container->get('translator');
 
-        return $this->doImportSave($request, $translator, $this->getDoctrine()->getManager());
+        return $this->doImportSave($request, $translator);
     }
 
     public static function getSubscribedServices(): array
     {
-        return ['validator' => ValidatorInterface::class] + parent::getSubscribedServices();
+        $newServices = [
+            'validator' => ValidatorInterface::class,
+        ];
+
+        return array_merge($newServices, parent::getSubscribedServices());
     }
 
     protected function redirectToImport(): RedirectResponse
@@ -67,13 +70,16 @@ trait ImportControllerTrait
         return $this->getParameter('sonata_batch_entity_import.templates.edit_matrix');
     }
 
-    protected function createMatrixForm(Matrix $matrix, EntityManagerInterface $entityManager): FormInterface
+    protected function createMatrixForm(Matrix $matrix): FormInterface
     {
+        $importConfiguration = $this->getImportConfiguration();
+
         return $this->createForm(
             MatrixType::class,
             $matrix,
             [
-                'configuration' => $this->getImportConfiguration($entityManager),
+                'configuration' => $importConfiguration,
+                'constraints' => $importConfiguration->getMatrixConstraints(),
             ]
         );
     }
