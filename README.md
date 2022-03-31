@@ -3,6 +3,9 @@
 ![Code Style](https://github.com/jgrygierek/SonataBatchEntityImportBundle/workflows/Code%20Style/badge.svg)
 ![Tests](https://github.com/jgrygierek/SonataBatchEntityImportBundle/workflows/Tests/badge.svg)
 ![Code Coverage](https://img.shields.io/codecov/c/github/jgrygierek/SonataBatchEntityImportBundle/master)
+![PHP Versions](https://img.shields.io/badge/PHP-7.4--8.1-blue)
+![Symfony Versions](https://img.shields.io/badge/Symfony-4.4--6.0-blue)
+[![SymfonyInsight](https://insight.symfony.com/projects/9b1b54d3-7c32-4e05-9d89-cfb0bf521720/mini.svg)](https://insight.symfony.com/projects/9b1b54d3-7c32-4e05-9d89-cfb0bf521720)
 
 Bundle is built on top of [BatchEntityImportBundle](https://github.com/jgrygierek/BatchEntityImportBundle).
 
@@ -21,11 +24,17 @@ Importing entities with preview and edit features for Sonata Admin.
 
 ## Documentation
 * [Installation](#installation)
-* [Basic configuration class](#basic-configuration-class)
+* [Configuration class](#configuration-class)
+  * [Basic configuration class](#basic-configuration-class)
+  * [Fields definitions](#fields-definitions)
+  * [Matrix validation](#matrix-validation)
+  * [Passing services to configuration class](#passing-services-to-configuration-class)
+  * [Show & hide entity override column](#show--hide-entity-override-column)
+  * [Optimizing queries](#optimizing-queries)
 * [Creating admin](#creating-admin)
-* [Controller](#controller)
+* [Default Controller](#default-controller)
+* [Custom Controller](#custom-controller)
 * [Translations](#translations)
-* [Fields definitions](#fields-definitions)
 * [Overriding templates](#overriding-templates)
 
 ## Installation
@@ -42,9 +51,13 @@ Add entry to `bundles.php` file:
 JG\SonataBatchEntityImportBundle\SonataBatchEntityImportBundle::class => ['all' => true],
 ```
 
-## Basic configuration class
+## Configuration class
 
-You have to create configuration class. In the simplest case it will contain only class of used entity.
+To define how the import function should work, you need to create a configuration class.
+
+### Basic configuration class
+
+In the simplest case it will contain only class of used entity.
 
 ```php
 namespace App\Model\ImportConfiguration;
@@ -58,6 +71,110 @@ class UserImportConfiguration extends AbstractImportConfiguration
     {
         return User::class;
     }
+}
+```
+
+Then register it as a service:
+
+```yaml
+services:
+  App\Model\ImportConfiguration\UserImportConfiguration: ~
+```
+
+### Fields definitions
+
+If you want to change types of rendered fields, instead of using default ones,
+you have to override method in your import configuration.
+
+To avoid errors during data import, you can add here validation rules.
+
+```php
+use JG\BatchEntityImportBundle\Model\Form\FormFieldDefinition;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Validator\Constraints\Length;
+
+public function getFieldsDefinitions(): array
+{
+    return [
+        'age' => new FormFieldDefinition(
+            IntegerType::class,
+            [
+                'attr' => [
+                    'min' => 0,
+                    'max' => 999,
+                ],
+            ]
+        ),
+        'name' => new FormFieldDefinition(TextType::class),
+        'description' => new FormFieldDefinition(
+            TextareaType::class,
+            [
+                'attr' => [
+                    'rows' => 2,
+                ],
+                'constraints' => [new Length(['max' => 255])],
+            ]
+        ),
+    ];
+}
+```
+
+### Matrix validation
+
+This bundle provides a new validator to check duplication without checking database, just only matrix records values.
+It has been created to be used on whole Matrix form, please don't use it on form fields.
+Names of fields should be the same as names of columns in your uploaded file.
+
+```php
+use JG\BatchEntityImportBundle\Validator\Constraints\MatrixRecordUnique;
+
+public function getMatrixConstraints(): array
+{
+    return [
+        new MatrixRecordUnique(['fields' => ['field_name']]),
+    ];
+}
+```
+
+### Passing services to configuration class
+
+If you want to pass some additional services to your configuration, just override constructor.
+
+```php
+public function __construct(EntityManagerInterface $em, TestService $service)
+{
+    parent::__construct($em);
+
+    $this->testService = $service;
+}
+```
+
+Then you will need to define this configuration class as a public service too.
+
+### Show & hide entity override column
+
+If you want to hide/show an entity column that allows you to override entity `default: true`,
+you have to override this method in your import configuration.
+
+```php
+public function allowOverrideEntity(): bool
+{
+    return true;
+}
+```
+
+### Optimizing queries
+
+If you use **KnpLabs Translatable** extension for your entity, probably you will notice increased number of queries, because of Lazy Loading.
+
+To optimize this, you can use `getEntityTranslationRelationName()` method to pass the relation name to the translation.
+
+```php
+public function getEntityTranslationRelationName(): ?string
+{
+    return 'translations';
 }
 ```
 
@@ -81,12 +198,19 @@ class UserAdmin extends AbstractAdmin implements AdminWithImportInterface
 }
 ```
 
-## Controller
+## Default controller
 
-- If you use default controller, no action is needed. Controller will be replaced automatically.
-- If you use your own custom controller, remember that this controller should:
-  - extend `JG\SonataBatchEntityImportBundle\Controller\ImportCrudController`
-  - or use `JG\SonataBatchEntityImportBundle\Controller\ImportControllerTrait`.
+If you use default controller, no action is needed. Controller will be replaced automatically.
+
+## Custom controller
+
+If you use your own custom controller, remember that this controller should:
+- extend `JG\SonataBatchEntityImportBundle\Controller\ImportCrudController`
+- or use `JG\SonataBatchEntityImportBundle\Controller\ImportControllerTrait`. 
+
+Additionally, if you want to automatically inject your import configuration class,
+remember to implement `JG\SonataBatchEntityImportBundle\Controller\ImportConfigurationAutoInjectInterface`
+and use method `getImportConfiguration()` from default controller.
 
 ## Translations
 
@@ -100,43 +224,6 @@ To use this feature, every column with translatable values should be suffixed wi
 If suffix will be added to non-translatable entity, field will be skipped.
 
 If suffix will be added to translatable entity, but field will not be found in translation class, field will be skipped.
-
-## Fields definitions
-
-If you want to change types of rendered fields, instead of using default ones,
-you have to override method in your import configuration.
-
-```php
-
-use JG\BatchEntityImportBundle\Model\Form\FormFieldDefinition;
-use Symfony\Component\Form\Extension\Core\Type\IntegerType;
-use Symfony\Component\Form\Extension\Core\Type\TextareaType;
-use Symfony\Component\Form\Extension\Core\Type\TextType;
-
-public function getFieldsDefinitions(): array
-{
-    return [
-        'age' => new FormFieldDefinition(
-            IntegerType::class,
-            [
-                'attr' => [
-                    'min' => 0,
-                    'max' => 999,
-                ],
-            ]
-        ),
-        'name' => new FormFieldDefinition(TextType::class),
-        'description' => new FormFieldDefinition(
-            TextareaType::class,
-            [
-                'attr' => [
-                    'rows' => 2,
-                ],
-            ]
-        ),
-    ];
-}
-```
 
 ## Overriding templates
 
